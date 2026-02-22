@@ -1,0 +1,12 @@
+# --- Environment ---
+.venv/
+.ipynb_checkpoints/
+__pycache__/
+
+# --- macOS System Files ---
+.DS_Store
+
+# --- Data & Outputs ---
+processed_data/
+reports/
+plots/
