@@ -4,6 +4,7 @@ import os
 from itertools import combinations
 import io
 import warnings
+import importlib
 
 import yfinance as yf
 import matplotlib.pyplot as plt
@@ -13,9 +14,10 @@ import statsmodels.api as sm
 import statsmodels.stats.api as sms
 import statsmodels.tsa.stattools as ts
 from statsmodels.stats.outliers_influence import variance_inflation_factor
+from src.excel_formatting import make_color_formats, write_formatted_table
 
 #Fetch data functions
-def download_and_convert_tickers(tickers_dict, start_date, end_date, fx_ticker, folder_name="tickers"):
+def download_and_convert_tickers(tickers_dict, start_date, end_date, fx_ticker, sector_name="tickers"):
     """
     Downloads historical ticker data and standardizes currency exposure to USD.
     Validates data integrity for subsequent OLS modeling.
@@ -41,13 +43,17 @@ def download_and_convert_tickers(tickers_dict, start_date, end_date, fx_ticker, 
         new_name = f"{base_name}{new_currency}"
         data[new_name] = data[asset] / data[new_fx_name]
     
-    path = f"processed_data/{folder_name}"
+    path = f"processed_data/comm_analysis/{sector_name}"
+    sentiment_path = f"processed_data/sentiment"
     os.makedirs(path, exist_ok=True)
     
-    file_path = f"{path}/dataset_{folder_name}.csv"
+    file_path = f"{path}/dataset_{sector_name}.csv"
+    sentiment_file_path = f"{sentiment_path}/dataset_{sector_name}.csv" 
     data.to_csv(file_path, index=True)
+    data.to_csv(sentiment_file_path, index=True) #df is saved for sentiment module
     
-    print(f"{folder_name}.csv generated at: {file_path}")
+    print(f"{sector_name}.csv generated at: {file_path}")
+    print(f"{sector_name}.csv generated at: {sentiment_file_path}")
     
     return data
 
@@ -64,7 +70,7 @@ def download_comm (commodities, start_date, end_date, sector_name):
 
     df_comm.rename(columns=commodities, inplace=True)
 
-    path = f"processed_data/{sector_name}"
+    path = f"processed_data/comm_analysis/{sector_name}"
     os.makedirs(path, exist_ok=True)
     df_comm.to_csv(f"{path}/{sector_name}_prices.csv", index=True)
 
@@ -108,11 +114,11 @@ def plot_base(df, title, base, start_date, end_date, sector_name):
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
     plt.tight_layout()
     
-    data_path = f"processed_data/{sector_name}/graph_data"
+    data_path = f"processed_data/comm_analysis/{sector_name}/graph_data"
     os.makedirs(data_path, exist_ok=True)
     df_norm.to_csv(f"{data_path}/{sector_name}_base_{base}.csv")
 
-    plot_path = f"plots/{sector_name}"
+    plot_path = f"plots/comm_analysis/{sector_name}"
     os.makedirs(plot_path, exist_ok=True)
     plot_path = f"{plot_path}/Base_100_{sector_name}.png"
     
@@ -151,12 +157,12 @@ def comm_cor(df, title, start_date, end_date, sector_name):
     ax.set_ylabel("")    
     plt.tight_layout()
 
-    data_path = f"processed_data/{sector_name}/graph_data"
+    data_path = f"processed_data/comm_analysis/{sector_name}/graph_data"
     os.makedirs(data_path, exist_ok=True)
     csv_path = f"{data_path}/{sector_name}_corr_matrix.csv"
     corr_matrix.to_csv(csv_path, index=True)
 
-    plot_path = f"plots/{sector_name}"
+    plot_path = f"plots/comm_analysis/{sector_name}"
     os.makedirs(plot_path, exist_ok=True)
     plot_path = f"{plot_path}/Daily_Corr_{sector_name}.png"
     
@@ -195,12 +201,12 @@ def plot_rolling_corr(df_main, df_assets, target, sector_name,window=60):
     plt.grid(True, alpha=0.2)
     plt.tight_layout()
     
-    data_path = f"processed_data/{sector_name}/graph_data"
+    data_path = f"processed_data/comm_analysis/{sector_name}/graph_data"
     os.makedirs(data_path, exist_ok=True)
     csv_path = f"{data_path}/{sector_name}_rolling_{window}.csv"
     rolling_results.to_csv(csv_path, index=True)
 
-    plot_path = f"plots/{sector_name}"
+    plot_path = f"plots/comm_analysis/{sector_name}"
     os.makedirs(plot_path, exist_ok=True)
     title_clean = f"Rolling_Corr_{window}_{sector_name}"
     plot_path = f"{plot_path}/{title_clean}.png"
@@ -214,7 +220,7 @@ def plot_rolling_corr(df_main, df_assets, target, sector_name,window=60):
 
 
 #Checks
-def check_adf(df, sector_name):
+def check_adf(df, sector_name, mod_path = "comm_analysis"):
     """
     Performs the Augmented Dickey-Fuller (ADF) test to ensure stationarity.
     Automatically applies log-returns to price series while maintaining levels 
@@ -263,8 +269,10 @@ def check_adf(df, sector_name):
         })
     
     df_final_results = pd.DataFrame(results_list)
-    
-    data_path = f"processed_data/{sector_name}/validation"
+    if sector_name.lower() == "events":
+        data_path = f"processed_data/{mod_path}/validation"
+    else:
+        data_path = f"processed_data/{mod_path}/{sector_name}/validation"
     os.makedirs(data_path, exist_ok=True)
     csv_path = f"{data_path}/{sector_name}_adf_test.csv"
     df_final_results.to_csv(csv_path, index=False)
@@ -273,7 +281,7 @@ def check_adf(df, sector_name):
     
     return df_final_results
 
-def check_vif(df_drivers, sector_name):
+def check_vif(df_drivers, sector_name, mod_path = "comm_analysis"):
     """
     Evaluates multicollinearity among predictors using the Variance Inflation Factor (VIF).
     Ensures the structural integrity of the OLS model by identifying redundant drivers 
@@ -294,7 +302,10 @@ def check_vif(df_drivers, sector_name):
     
     vif_report = vif_data[vif_data["Variable"] != "const"].sort_values(by="VIF", ascending=False)
     
-    data_path = f"processed_data/{sector_name}/validation"
+    if sector_name.lower() == "events":
+        data_path = f"processed_data/{mod_path}/validation"
+    else:
+        data_path = f"processed_data/{mod_path}/{sector_name}/validation"
     os.makedirs(data_path, exist_ok=True)
     csv_path = f"{data_path}/{sector_name}_vif_test.csv"
     vif_report.to_csv(csv_path, index=False)
@@ -369,14 +380,16 @@ def check_ols(df_main, df_drivers, target_col, sector_name):
     'AIC': model.aic,
     'BIC': model.bic,
     }])
-
-    data_path = f"processed_data/{sector_name}/model_results"
+    if sector_name.lower() == "events":
+        data_path = f"processed_data/sentiment/model_results"
+        plot_path = f"plots/sentiment/{sector_name}"
+    else:
+        data_path = f"processed_data/comm_analysis/{sector_name}/model_results"
+        plot_path = f"plots/comm_analysis/{sector_name}"
     os.makedirs(data_path, exist_ok=True)
-    
+    os.makedirs(plot_path, exist_ok=True)
     results_df.to_csv(f"{data_path}/{sector_name}_ols_coefficients.csv")
     metrics_df.to_csv(f"{data_path}/{sector_name}_ols_metrics.csv", index=False)
-    plot_path = f"plots/{sector_name}"
-    os.makedirs(plot_path, exist_ok=True)
     plt.savefig(f"{plot_path}/OLS_Impact_{sector_name}.png", dpi=300, bbox_inches='tight')
     
     plt.show()
@@ -450,29 +463,65 @@ def check_granger(df, target_col, predictor_col, max_lag=5):
         
     return results
 
-def prepare_market_data(df):
+def prepare_market_data(input_data):
     """
     Standardizes the DataFrame index into a sorted DatetimeIndex prior to 
     econometric modeling. Ensures structural integrity for statistical 
     validation and OLS regression.
     """
-    df = df.copy()
+    if isinstance(input_data, str):
+        if not os.path.exists(input_data):
+            raise FileNotFoundError(f"The file path was not found: {input_data}")
+        df = pd.read_csv(input_data)
+    else:
+        df = input_data.copy()
     
-    col_fecha = None
-    for col in ['Date']:
-        if col in df.columns:
-            col_fecha = col
-            break
-            
-    if col_fecha:
-        df[col_fecha] = pd.to_datetime(df[col_fecha])
-        df = df.set_index(col_fecha).sort_index()
+    if 'Date' in df.columns:
+        df['Date'] = pd.to_datetime(df['Date'])
+        df = df.drop_duplicates(subset='Date')
+        df = df.set_index('Date')
     
     elif not isinstance(df.index, pd.DatetimeIndex):
-        raise KeyError("Date column wasn't found in the Dataframe")
+        try:
+            df.index = pd.to_datetime(df.index)
+        except:
+            raise KeyError("No 'Date' column found and Index is not convertible to Datetime.")
         
+    df = df[~df.index.duplicated(keep='first')]
+
+    df = df.sort_index()
+    df.index.name = 'Date'
+    
+    return df
+
+def prepare_market_data(input_data):
+    """
+    Standardizes the DataFrame index into a sorted DatetimeIndex prior to 
+    econometric modeling. Ensures structural integrity for statistical 
+    validation and OLS regression.
+    """
+    if isinstance(input_data, str):
+        if not os.path.exists(input_data):
+            raise FileNotFoundError(f"The file path was not found: {input_data}")
+        df = pd.read_csv(input_data)
+    else:
+        df = input_data.copy()
+    
+    if 'Date' in df.columns:
+        df['Date'] = pd.to_datetime(df['Date'])
+        df = df.drop_duplicates(subset='Date')
+        df = df.set_index('Date')
+    elif not isinstance(df.index, pd.DatetimeIndex):
+        try:
+            df.index = pd.to_datetime(df.index)
+        except:
+            raise KeyError("No 'Date' column found and Index is not convertible to Datetime.")
+        
+    df = df[~df.index.duplicated(keep='first')]
+    df = df.sort_index()
     df.index.name = 'Date'
     return df
+
 
 def generate_sector_report(sector_name):
     """
@@ -485,86 +534,76 @@ def generate_sector_report(sector_name):
         os.makedirs(output_dir)
         print(f"Folder '{output_dir}' created.")
     output_file = os.path.join(output_dir, f"{sector_name.upper()}_report.xlsx")
-    sheet_name = f'Dashboard_{sector_name}'
-    
-    path_model = f"processed_data/{sector_name}/model_results"
-    path_valid = f"processed_data/{sector_name}/validation"
-    path_plots = f"plots/{sector_name}"
+    sheet_name  = f'Dashboard_{sector_name}'
 
-    writer = pd.ExcelWriter(output_file, engine='xlsxwriter')
+    path_model = f"processed_data/comm_analysis/{sector_name}/model_results"
+    path_valid = f"processed_data/comm_analysis/{sector_name}/validation"
+    path_plots = f"plots/comm_analysis/{sector_name}"
+
+    writer   = pd.ExcelWriter(output_file, engine='xlsxwriter',
+                               engine_kwargs={'options': {'nan_inf_to_errors': True}})
     workbook = writer.book
-    sheet = workbook.add_worksheet(sheet_name)
+    sheet    = workbook.add_worksheet(sheet_name)
 
-    title_fmt = workbook.add_format({'bold': True, 'font_size': 26, 'font_color': '#333F48'}) 
-    note_fmt = workbook.add_format({'font_size': 11, 'italic': True, 'font_color': '#5A5A5A', 'text_wrap': True,'valign': 'top'})
-    header_fmt = workbook.add_format({'bold': True, 'font_size': 22, 'font_color': '#1f4e78'})
-    num_fmt = workbook.add_format({'bold': False, 'font_size': 16, 'font_color': "#000000", 'num_format': '#,##0.000'})
-    sci_fmt = workbook.add_format({'bold': False, 'font_size': 16, 'font_color': "#000000", 'num_format': '0.00E+00'})
+    title_fmt      = workbook.add_format({'bold': True, 'font_size': 26, 'font_color': '#333F48'})
+    note_fmt       = workbook.add_format({'font_size': 11, 'italic': True, 'font_color': '#5A5A5A', 'text_wrap': True, 'valign': 'top'})
+    header_fmt     = workbook.add_format({'bold': True, 'font_size': 22, 'font_color': '#1f4e78'})
+    num_fmt        = workbook.add_format({'bold': False, 'font_size': 16, 'font_color': '#000000', 'num_format': '#,##0.0000'})
+    sci_fmt        = workbook.add_format({'bold': False, 'font_size': 16, 'font_color': '#000000', 'num_format': '0.00E+00'})
     col_header_fmt = workbook.add_format({'bold': True, 'font_size': 16, 'font_color': '#1f4e78', 'bg_color': '#D9E1F2', 'border': 1})
-    row_index_fmt = workbook.add_format({'bold': True, 'font_size': 16, 'font_color': '#000000'})
-    
+    row_index_fmt  = workbook.add_format({'bold': True, 'font_size': 16, 'font_color': '#000000'})
+    color_fmts     = make_color_formats(workbook)  # formats imported from excel_formatting.py
+
     try:
-        sheet.write('B4', "Explanatory power of the model (0.067 = 6.7'%' of variance explained.)", note_fmt)
+        # Titles and notes
+        sheet.write('A2', f"Sectorial Statistical Performance & Econometric Analysis ({sector_name})", title_fmt)
+        sheet.write('B4', "Explanatory power of the model (0.067 = 6.7% of variance explained.)", note_fmt)
         sheet.write('D4', "Overall significance. If < 0.05, the model is valid.", note_fmt)
         sheet.write('E4', "Tests for autocorrelation. Values ~2.0 indicate a healthy time-series.", note_fmt)
         sheet.write('F4', "Residual normality. < 0.05 means non-normal errors (standard in high-frequency finance)", note_fmt)
         sheet.write('G4', "Model selection criteria. Lower is better when comparing different versions of this model.", note_fmt)
-
-        sheet.write('A2', f"Sectorial Statistical Performance & Econometric Analysis ({sector_name})", title_fmt)
         sheet.write('E36', "Note: OLS Coefficients with P-values < 0.05 are statistically significant.", note_fmt)
         sheet.write('D73', "Series is stationary if p-value < 0.05 (Null hypothesis rejected).", note_fmt)
         sheet.write('C80', "VIF scale: 1 = No correlation | >5 = High multicollinearity risk.", note_fmt)
 
         images_config = {
-            'G9': {'path': f"{path_plots}/Base_100_{sector_name}.png", 'scale': 0.9},
-            'A9': {'path': f"{path_plots}/OLS_Impact_{sector_name}.png", 'scale': 1},
-            'A43': {'path': f"{path_plots}/Daily_Corr_{sector_name}.png", 'scale': 0.85},
-            'F43': {'path': f"{path_plots}/Rolling_Corr_60_{sector_name}.png", 'scale': 0.85}
+            'G9': {'path': f"{path_plots}/Base_100_{sector_name}.png",       'scale': 0.90},
+            'A9': {'path': f"{path_plots}/OLS_Impact_{sector_name}.png",     'scale': 1.00},
+            'A43':{'path': f"{path_plots}/Daily_Corr_{sector_name}.png",     'scale': 0.85},
+            'F43':{'path': f"{path_plots}/Rolling_Corr_60_{sector_name}.png",'scale': 0.85},
         }
-
         for cell, info in images_config.items():
             if os.path.exists(info['path']):
                 sheet.insert_image(cell, info['path'], {
-                    'x_scale': info['scale'], 
+                    'x_scale': info['scale'],
                     'y_scale': info['scale'],
-                    'object_position': 3
+                    'object_position': 3,
                 })
-        sheet.set_column(0,10, 20, num_fmt)
-    
+        sheet.set_column(0, 10, 20, num_fmt)
+
         tables_to_process = [
-            (f"{path_model}/{sector_name}_ols_metrics.csv", 4, 'OLS Results', True),
-            (f"{path_model}/{sector_name}_ols_coefficients.csv", 36, 'OLS Coefficients', True),
-            (f"{path_valid}/{sector_name}_adf_test.csv", 73, 'Stationarity Test (ADF)', True),
-            (f"{path_valid}/{sector_name}_vif_test.csv", 80, 'Multicollinearity Test (VIF)', True)
+            (f"{path_model}/{sector_name}_ols_metrics.csv", 4, 0, 'OLS Results', True,  False),
+            (f"{path_model}/{sector_name}_ols_coefficients.csv",  36, 0, 'OLS Coefficients', True,  False),
+            (f"{path_valid}/{sector_name}_adf_test.csv", 73, 0, 'Stationarity Test (ADF)', False, True ),
+            (f"{path_valid}/{sector_name}_vif_test.csv", 80, 0, 'Multicollinearity Test (VIF)', False, False),
         ]
 
-        for path, s_row, s_title, has_index in tables_to_process:
+        for path, s_row, s_col, s_title, has_index, is_adf in tables_to_process:
             if os.path.exists(path):
                 df_temp = pd.read_csv(path, index_col=0 if has_index else None)
-                
                 write_formatted_table(
-                    sheet, writer, df_temp, s_row, s_title, 
-                    header_fmt, col_header_fmt, row_index_fmt, sheet_name, num_fmt, sci_fmt
+                    sheet, writer, df_temp, s_row, s_col, s_title,
+                    header_fmt, col_header_fmt, row_index_fmt, sheet_name,
+                    num_fmt, sci_fmt,
+                    has_named_index=has_index,
+                    color_fmts=color_fmts,
+                    adf_mode=is_adf,
                 )
 
     except Exception as e:
+        import traceback
         print(f"Critical error while processing {sector_name}: {e}")
+        traceback.print_exc()
 
     writer.close()
     print(f"File generated at: {os.path.abspath(output_file)}")
-
-def write_formatted_table(sheet, writer, df, start_row, title, title_fmt, header_fmt, index_fmt, sheet_name, num_fmt, sci_fmt):
-    """
-    Core engine for structured Excel reporting. Overlays Pandas DataFrames 
-    onto pre-formatted XlsxWriter sheets, applying custom styles to 
-    headers, indices, and financial metrics for high-end visual consistency.
-    """
-    sheet.write(start_row - 1, 0, title, title_fmt)
-    df.to_excel(writer, sheet_name=sheet_name, startrow=start_row, startcol=0)
-    sheet.write(start_row, 0, df.index.name if df.index.name else "", header_fmt)
-
-    for col_num, value in enumerate(df.columns.values):
-        sheet.write(start_row, col_num + 1, value, header_fmt)
-        
-    for row_num, value in enumerate(df.index.values):
-        sheet.write(start_row + 1 + row_num, 0, value, index_fmt)
