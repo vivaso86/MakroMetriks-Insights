@@ -46,6 +46,18 @@ def _rule_vif(v):
     elif v <= 10.0: return 'orange'
     else: return 'red'
 
+def _rule_granger_pvalue(v):
+    """Granger p-value: <0.05 green, 0.05-0.10 orange, >0.10 red."""
+    if v < 0.05:            return 'green'
+    elif 0.05 <= v <= 0.10: return 'orange'
+    else:                   return 'red'
+
+def _rule_granger_fstat(v):
+    """Granger F-Statistic: >3.0 green (strong), >1.0 orange (moderate), <1.0 red (weak)."""
+    if v > 3.0:    return 'green'
+    elif v > 1.0:  return 'orange'
+    else:          return 'red'
+
 # Rule maps per table type
 OLS_METRICS_RULES = {
     'Adj. R-squared': _rule_adj_r2,
@@ -61,6 +73,10 @@ ADF_RULES = {
 }
 VIF_RULES = {
     'VIF': _rule_vif,
+}
+GRANGER_RULES = {
+    'p_value':     _rule_granger_pvalue,
+    'F_Statistic': _rule_granger_fstat,
 }
 
 #Color format
@@ -128,6 +144,11 @@ def make_color_formats(workbook, font_size=16):
         'font_strikeout': True,
         'num_format':   '0.00E+00',
     }),
+        'integer': workbook.add_format({
+        'font_size':  font_size,
+        'font_color': '#000000',
+        'num_format': '0',
+    })
     }
 
 # Helpers
@@ -143,6 +164,10 @@ def sanitize_column_names(df: pd.DataFrame) -> pd.DataFrame:
         else:
             rename_map[col] = col.replace("[", "").replace("]", "").strip()
     return df.rename(columns=rename_map)
+
+def clean_index_names(df: pd.DataFrame) -> pd.DataFrame:
+    """Renames DataFrame index values to cleaner display names."""
+    return df.rename(index=_INDEX_RENAME)
 
 def resolve_fmt(color_key, value, sci_threshold, color_fmts, num_fmt, sci_fmt):
     """
@@ -196,9 +221,11 @@ def write_formatted_table(sheet, writer, df: pd.DataFrame, start_row: int, start
         active_rules = VIF_RULES
     elif 'P>|t|' in df.columns:
         active_rules = OLS_COEF_RULES
+    elif 'F_Statistic' in df.columns:
+        active_rules = GRANGER_RULES
     else:
         active_rules = OLS_METRICS_RULES
-
+    
     # Numeric types: native Python + numpy scalars
     _num_types = (int, float, np.floating, np.integer)  #covers all numpy scalar types
 
@@ -248,6 +275,16 @@ def write_formatted_table(sheet, writer, df: pd.DataFrame, start_row: int, start
                     color_key = ADF_RULES[col_name](cell_value)
                 elif col_name in active_rules:
                     color_key = active_rules[col_name](cell_value)
+                    
+            # --- Granger Significant column: color by YES/NO text ---
+            if col_name == 'Significant' and isinstance(cell_value, str):
+                if color_fmts:
+                    fmt = color_fmts['green'] if cell_value == 'YES' else color_fmts['red']
+                    sheet.write(current_row, current_col, cell_value, fmt)
+                    continue
+            if col_name == 'Lag' and isinstance(cell_value, _num_types) and color_fmts:
+                sheet.write_number(current_row, current_col, float(cell_value), color_fmts['integer'])
+                continue
 
             # Write cell
             if isinstance(cell_value, bool):
@@ -265,7 +302,3 @@ _INDEX_RENAME = {
     'External_Index': 'External Index',
     'Panic_Index':    'Panic Index',
     }
-
-def clean_index_names(df: pd.DataFrame) -> pd.DataFrame:
-    """Renames DataFrame index values to cleaner display names."""
-    return df.rename(index=_INDEX_RENAME)

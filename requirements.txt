@@ -6,7 +6,9 @@ seaborn
 statsmodels
 pytrends
 xlsxwriter
+openpyxl
 lxml
+scipy
 requests
 jupyter
 notebook

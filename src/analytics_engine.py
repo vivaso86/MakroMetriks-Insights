@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
-import os
 from itertools import combinations
+import os
 import io
 import warnings
 import importlib
@@ -271,6 +271,8 @@ def check_adf(df, sector_name, mod_path = "comm_analysis"):
     df_final_results = pd.DataFrame(results_list)
     if sector_name.lower() == "events":
         data_path = f"processed_data/{mod_path}/validation"
+    elif sector_name.lower() == "final_ols":
+        data_path = f"processed_data/{sector_name}/validation"
     else:
         data_path = f"processed_data/{mod_path}/{sector_name}/validation"
     os.makedirs(data_path, exist_ok=True)
@@ -304,6 +306,8 @@ def check_vif(df_drivers, sector_name, mod_path = "comm_analysis"):
     
     if sector_name.lower() == "events":
         data_path = f"processed_data/{mod_path}/validation"
+    elif sector_name.lower() == "final_ols":
+        data_path = f"processed_data/{sector_name}/validation"
     else:
         data_path = f"processed_data/{mod_path}/{sector_name}/validation"
     os.makedirs(data_path, exist_ok=True)
@@ -381,8 +385,11 @@ def check_ols(df_main, df_drivers, target_col, sector_name):
     'BIC': model.bic,
     }])
     if sector_name.lower() == "events":
-        data_path = f"processed_data/sentiment/model_results"
+        data_path = "processed_data/sentiment/model_results"
         plot_path = f"plots/sentiment/{sector_name}"
+    elif sector_name.lower() == "final_ols":
+        data_path = f"processed_data/{sector_name}/model_results"
+        plot_path = f"plots/{sector_name}"
     else:
         data_path = f"processed_data/comm_analysis/{sector_name}/model_results"
         plot_path = f"plots/comm_analysis/{sector_name}"
@@ -400,7 +407,7 @@ def check_ols(df_main, df_drivers, target_col, sector_name):
     print(model.summary())
     return model
 
-def check_residuals(model, target_name):
+def check_residuals(model, target_name, sector_name, num_errors):
     """
     Analyzes model prediction errors to validate OLS assumptions. 
     Performs outlier detection using a 2-sigma threshold and evaluates 
@@ -425,50 +432,89 @@ def check_residuals(model, target_name):
     sns.histplot(residuals, kde=True, ax=ax2, color='skyblue')
     ax2.set_title('Error Distribution (Residuals Analysis)')
     ax2.set_xlabel('Error Value')
-    
     plt.tight_layout()
-    plt.show()
     
-    top_errors = np.abs(residuals).sort_values(ascending=False).head(7)
+    if sector_name.lower() == "all_commodities":
+        data_path = f"processed_data/comm_analysis/{sector_name}/model_results"
+        plot_path = f"plots/comm_analysis/{sector_name}"
+    elif sector_name.lower() == "final_ols":
+        data_path = f"processed_data/{sector_name}/model_results"
+        plot_path = f"plots/{sector_name}"
+
+    os.makedirs(plot_path, exist_ok=True)
+    plt.savefig(f"{plot_path}/{sector_name}_residuals.png", dpi=300, bbox_inches='tight')
+    plt.show()
+    plt.close()
+    
+    top_errors = np.abs(residuals).sort_values(ascending=False).head(num_errors)
     print(f"\n--- Outlier Detection: Largest Residuals for {target_name} ---")
     print(top_errors)
+
+    os.makedirs(data_path, exist_ok=True)
+    residuals.to_csv(f"{data_path}/{sector_name}_ols_residuals.csv")
+    top_errors.to_csv(f"{data_path}/{sector_name}_top_errors.csv", index=True)
     
     return top_errors
 
-def check_granger(df, target_col, predictor_col, max_lag=5):
+def check_granger(df, target_col, predictor_col, sector_name="final_ols",max_lag=5):
     """
     Performs the Granger Causality test to determine lead-lag relationships.
     Identifies if historical values of a predictor (e.g., Commodities) provide 
     statistically significant information to forecast a target asset's returns.
     """
     print(f"\n--- Checking Granger Causality: Does {predictor_col} 'cause' {target_col}? ---")
-    data = df[[target_col, predictor_col]].dropna()
-    with warnings.catch_warnings(): #Noise is hidden
-        warnings.simplefilter("ignore")
-        results = ts.grangercausalitytests(data, maxlag=max_lag, verbose=False)
-    
-    significant_found = False
-    for lag, test_output in results.items():
-        p_value = test_output[0]['ssr_ftest'][1]
-        status = "SIGNIFICANT" if p_value <= 0.05 else "not significant"
-        print(f"Lag {lag}: p-value = {p_value:.4f} -> {status}")
-        
-        if p_value <= 0.05:
-            significant_found = True
-            
-    if significant_found:
-        print(f"CONCLUSION: {predictor_col} has predictive power over {target_col}.")
-    else:
-        print(f"CONCLUSION: No predictive relationship found for the selected lags.")
-        
-    return results
+    all_results = {}
+
+    for pred in predictor_col:
+        print(f"\n  Predictor: {pred}")
+        data = df[[target_col, pred]].dropna()
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            results = ts.grangercausalitytests(data, maxlag=max_lag, verbose=False)
+
+        significant_found = False
+        rows = []
+
+        for lag, test_output in results.items():
+            p_value = test_output[0]['ssr_ftest'][1]
+            f_stat  = test_output[0]['ssr_ftest'][0]
+            status  = "YES" if p_value <= 0.05 else "NO"
+
+            if p_value <= 0.05:
+                significant_found = True
+
+            print(f"Lag {lag}: p-value = {p_value:.4f} -> {'SIGNIFICANT' if status == 'YES' else 'not significant'}")
+
+            rows.append({
+                'Predictor': pred,
+                'Target': target_col,
+                'Lag': lag,
+                'F_Statistic': round(f_stat, 4),
+                'p_value': round(p_value, 4),
+                'Significant': status,
+            })
+
+        if sector_name.lower() == "final_ols":
+            save_dir = f"processed_data/{sector_name}/validation/{sector_name}_granger"
+        else:
+             save_dir = f"processed_data/comm_analysis/{sector_name}/validation/{sector_name}_granger"
+        os.makedirs(save_dir, exist_ok=True)
+        csv_path = f"{save_dir}/{pred}_granger.csv"
+        pd.DataFrame(rows).to_csv(csv_path, index=False)
+        print(f"  Exported: {csv_path}")
+
+        if significant_found:
+            print(f"CONCLUSION: {pred} has predictive power over {target_col}.")
+        else:
+            print(f"CONCLUSION: No predictive relationship found for {pred}.")
+
+        all_results[pred] = results
+
+    return all_results
+
 
 def prepare_market_data(input_data):
-    """
-    Standardizes the DataFrame index into a sorted DatetimeIndex prior to 
-    econometric modeling. Ensures structural integrity for statistical 
-    validation and OLS regression.
-    """
     if isinstance(input_data, str):
         if not os.path.exists(input_data):
             raise FileNotFoundError(f"The file path was not found: {input_data}")
@@ -480,37 +526,7 @@ def prepare_market_data(input_data):
         df['Date'] = pd.to_datetime(df['Date'])
         df = df.drop_duplicates(subset='Date')
         df = df.set_index('Date')
-    
-    elif not isinstance(df.index, pd.DatetimeIndex):
-        try:
-            df.index = pd.to_datetime(df.index)
-        except:
-            raise KeyError("No 'Date' column found and Index is not convertible to Datetime.")
-        
-    df = df[~df.index.duplicated(keep='first')]
 
-    df = df.sort_index()
-    df.index.name = 'Date'
-    
-    return df
-
-def prepare_market_data(input_data):
-    """
-    Standardizes the DataFrame index into a sorted DatetimeIndex prior to 
-    econometric modeling. Ensures structural integrity for statistical 
-    validation and OLS regression.
-    """
-    if isinstance(input_data, str):
-        if not os.path.exists(input_data):
-            raise FileNotFoundError(f"The file path was not found: {input_data}")
-        df = pd.read_csv(input_data)
-    else:
-        df = input_data.copy()
-    
-    if 'Date' in df.columns:
-        df['Date'] = pd.to_datetime(df['Date'])
-        df = df.drop_duplicates(subset='Date')
-        df = df.set_index('Date')
     elif not isinstance(df.index, pd.DatetimeIndex):
         try:
             df.index = pd.to_datetime(df.index)
@@ -523,13 +539,8 @@ def prepare_market_data(input_data):
     return df
 
 
-def generate_sector_report(sector_name):
-    """
-    Automates the generation of a high-fidelity Excel Dashboard. 
-    Consolidates econometric metrics, statistical validations (ADF, VIF), 
-    and high-resolution visualizations into a client-ready analytical report.
-    """
-    output_dir = "reports"
+def generate_sector_report(sector_name, writer=None):
+    output_dir = "reports/single_reports"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
         print(f"Folder '{output_dir}' created.")
@@ -540,19 +551,25 @@ def generate_sector_report(sector_name):
     path_valid = f"processed_data/comm_analysis/{sector_name}/validation"
     path_plots = f"plots/comm_analysis/{sector_name}"
 
-    writer   = pd.ExcelWriter(output_file, engine='xlsxwriter',
-                               engine_kwargs={'options': {'nan_inf_to_errors': True}})
-    workbook = writer.book
-    sheet    = workbook.add_worksheet(sheet_name)
+    _standalone = writer is None
+    if _standalone:
+        os.makedirs(output_dir, exist_ok=True)
+        writer = pd.ExcelWriter(output_file, engine='xlsxwriter',
+                                engine_kwargs={'options': {'nan_inf_to_errors': True}})
+        workbook = writer.book
+    else:
+        workbook = writer.book
 
-    title_fmt      = workbook.add_format({'bold': True, 'font_size': 26, 'font_color': '#333F48'})
-    note_fmt       = workbook.add_format({'font_size': 11, 'italic': True, 'font_color': '#5A5A5A', 'text_wrap': True, 'valign': 'top'})
-    header_fmt     = workbook.add_format({'bold': True, 'font_size': 22, 'font_color': '#1f4e78'})
-    num_fmt        = workbook.add_format({'bold': False, 'font_size': 16, 'font_color': '#000000', 'num_format': '#,##0.0000'})
-    sci_fmt        = workbook.add_format({'bold': False, 'font_size': 16, 'font_color': '#000000', 'num_format': '0.00E+00'})
+    sheet = workbook.add_worksheet(sheet_name)
+
+    title_fmt = workbook.add_format({'bold': True, 'font_size': 26, 'font_color': '#333F48'})
+    note_fmt = workbook.add_format({'font_size': 11, 'italic': True, 'font_color': '#5A5A5A', 'text_wrap': True, 'valign': 'top'})
+    header_fmt = workbook.add_format({'bold': True, 'font_size': 22, 'font_color': '#1f4e78'})
+    num_fmt = workbook.add_format({'bold': False, 'font_size': 16, 'font_color': '#000000', 'num_format': '#,##0.0000'})
+    sci_fmt  = workbook.add_format({'bold': False, 'font_size': 16, 'font_color': '#000000', 'num_format': '0.00E+00'})
     col_header_fmt = workbook.add_format({'bold': True, 'font_size': 16, 'font_color': '#1f4e78', 'bg_color': '#D9E1F2', 'border': 1})
-    row_index_fmt  = workbook.add_format({'bold': True, 'font_size': 16, 'font_color': '#000000'})
-    color_fmts     = make_color_formats(workbook)  # formats imported from excel_formatting.py
+    row_index_fmt = workbook.add_format({'bold': True, 'font_size': 16, 'font_color': '#000000'})
+    color_fmts = make_color_formats(workbook)  # formats imported from excel_formatting.py
 
     try:
         # Titles and notes
@@ -605,5 +622,6 @@ def generate_sector_report(sector_name):
         print(f"Critical error while processing {sector_name}: {e}")
         traceback.print_exc()
 
-    writer.close()
-    print(f"File generated at: {os.path.abspath(output_file)}")
+    if _standalone:
+        writer.close()
+        print(f"File generated at: {os.path.abspath(output_file)}")
