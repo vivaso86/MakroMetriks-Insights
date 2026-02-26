@@ -1,3 +1,6 @@
+# MakroMetriks Insights · Victor Valle Solar
+# github.com/vivaso86/MakroMetriks-Insights
+
 import numpy as np
 import pandas as pd
 
@@ -80,7 +83,6 @@ GRANGER_RULES = {
 }
 
 #Color format
-
 def make_color_formats(workbook, font_size=16):
     """
     Creates XlsxWriter red/green color formats.
@@ -152,7 +154,6 @@ def make_color_formats(workbook, font_size=16):
     }
 
 # Helpers
-
 def sanitize_column_names(df: pd.DataFrame) -> pd.DataFrame:
     """Cleans column names with characters that are problematic for XlsxWriter."""
     rename_map = {}
@@ -182,7 +183,6 @@ def resolve_fmt(color_key, value, sci_threshold, color_fmts, num_fmt, sci_fmt):
         return sci_fmt if use_sci else num_fmt
 
 # Writing engine
-
 def write_formatted_table(sheet, writer, df: pd.DataFrame, start_row: int, start_col: int, title: str, title_fmt, header_fmt,
     index_fmt, sheet_name: str, num_fmt, sci_fmt, sci_threshold: float = 0.0001, has_named_index: bool = None,
     color_fmts: dict = None, column_rules: dict = None, adf_mode: bool = False,
@@ -195,11 +195,9 @@ def write_formatted_table(sheet, writer, df: pd.DataFrame, start_row: int, start
     - Apply red/green colors based on econometric rules
     - Prevent overwriting other tables in the dashboard
     """
-    # Sanitize column names
     df = sanitize_column_names(df)
     df = clean_index_names(df) 
 
-    # Detect index
     if has_named_index is None:
         has_named_index = bool(df.index.name)
     data_col_offset = 1 if has_named_index else 0
@@ -226,10 +224,8 @@ def write_formatted_table(sheet, writer, df: pd.DataFrame, start_row: int, start
     else:
         active_rules = OLS_METRICS_RULES
     
-    # Numeric types: native Python + numpy scalars
-    _num_types = (int, float, np.floating, np.integer)  #covers all numpy scalar types
+    _num_types = (int, float, np.floating, np.integer)
 
-    # Data rows
     for row_num, (idx_value, row) in enumerate(df.iterrows()):
         current_row = start_row + 1 + row_num
 
@@ -276,7 +272,6 @@ def write_formatted_table(sheet, writer, df: pd.DataFrame, start_row: int, start
                 elif col_name in active_rules:
                     color_key = active_rules[col_name](cell_value)
                     
-            # --- Granger Significant column: color by YES/NO text ---
             if col_name == 'Significant' and isinstance(cell_value, str):
                 if color_fmts:
                     fmt = color_fmts['green'] if cell_value == 'YES' else color_fmts['red']

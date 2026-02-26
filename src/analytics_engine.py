@@ -1,3 +1,6 @@
+# MakroMetriks Insights · Victor Valle Solar
+# github.com/vivaso86/MakroMetriks-Insights
+
 import pandas as pd
 import numpy as np
 from itertools import combinations
@@ -562,7 +565,7 @@ def generate_sector_report(sector_name, writer=None):
 
     sheet = workbook.add_worksheet(sheet_name)
 
-    title_fmt = workbook.add_format({'bold': True, 'font_size': 26, 'font_color': '#333F48'})
+    title_fmt = workbook.add_format({'bold': True, 'font_size': 36, 'font_color': '#333F48'})
     note_fmt = workbook.add_format({'font_size': 11, 'italic': True, 'font_color': '#5A5A5A', 'text_wrap': True, 'valign': 'top'})
     header_fmt = workbook.add_format({'bold': True, 'font_size': 22, 'font_color': '#1f4e78'})
     num_fmt = workbook.add_format({'bold': False, 'font_size': 16, 'font_color': '#000000', 'num_format': '#,##0.0000'})
@@ -574,18 +577,26 @@ def generate_sector_report(sector_name, writer=None):
     try:
         # Titles and notes
         sheet.write('A2', f"Sectorial Statistical Performance & Econometric Analysis ({sector_name})", title_fmt)
-        sheet.write('B4', "Explanatory power of the model (0.067 = 6.7% of variance explained.)", note_fmt)
-        sheet.write('D4', "Overall significance. If < 0.05, the model is valid.", note_fmt)
-        sheet.write('E4', "Tests for autocorrelation. Values ~2.0 indicate a healthy time-series.", note_fmt)
-        sheet.write('F4', "Residual normality. < 0.05 means non-normal errors (standard in high-frequency finance)", note_fmt)
-        sheet.write('G4', "Model selection criteria. Lower is better when comparing different versions of this model.", note_fmt)
+        sheet.write('B3', "Explanatory power of the model (0.067 = 6.7% of variance explained.)", note_fmt)
+        sheet.write('D3', "Overall significance. If < 0.05, the model is valid.", note_fmt)
+        sheet.write('E3', "Tests for autocorrelation. Values ~2.0 indicate a healthy time-series.", note_fmt)
+        sheet.write('F3', "Residual normality. < 0.05 means non-normal errors (standard in high-frequency finance)", note_fmt)
+        sheet.write('G3', "Model selection criteria. Lower is better when comparing different versions of this model.", note_fmt)
         sheet.write('E36', "Note: OLS Coefficients with P-values < 0.05 are statistically significant.", note_fmt)
         sheet.write('D73', "Series is stationary if p-value < 0.05 (Null hypothesis rejected).", note_fmt)
-        sheet.write('C80', "VIF scale: 1 = No correlation | >5 = High multicollinearity risk.", note_fmt)
+        sheet.write('J73', "VIF scale: 1 = No correlation | >5 = High multicollinearity risk.", note_fmt)
+        sheet.set_footer('&L&K909090&8Victor Valle Solar&R&K909090&8© MakroMetriks Insights')
+
+        # Fit to page for PDF export
+        sheet.set_landscape()
+        sheet.fit_to_pages(1, 0)
+        sheet.set_margins(left=0.25, right=0.25, top=0.75, bottom=0.75)
+        sheet.set_paper(8)
+        sheet.set_h_pagebreaks([35, 123])
 
         images_config = {
             'G9': {'path': f"{path_plots}/Base_100_{sector_name}.png",       'scale': 0.90},
-            'A9': {'path': f"{path_plots}/OLS_Impact_{sector_name}.png",     'scale': 1.00},
+            'A9': {'path': f"{path_plots}/OLS_Impact_{sector_name}.png",     'scale': 0.95},
             'A43':{'path': f"{path_plots}/Daily_Corr_{sector_name}.png",     'scale': 0.85},
             'F43':{'path': f"{path_plots}/Rolling_Corr_60_{sector_name}.png",'scale': 0.85},
         }
@@ -602,7 +613,7 @@ def generate_sector_report(sector_name, writer=None):
             (f"{path_model}/{sector_name}_ols_metrics.csv", 4, 0, 'OLS Results', True,  False),
             (f"{path_model}/{sector_name}_ols_coefficients.csv",  36, 0, 'OLS Coefficients', True,  False),
             (f"{path_valid}/{sector_name}_adf_test.csv", 73, 0, 'Stationarity Test (ADF)', False, True ),
-            (f"{path_valid}/{sector_name}_vif_test.csv", 80, 0, 'Multicollinearity Test (VIF)', False, False),
+            (f"{path_valid}/{sector_name}_vif_test.csv", 73, 7, 'Multicollinearity Test (VIF)', False, False),
         ]
 
         for path, s_row, s_col, s_title, has_index, is_adf in tables_to_process:

@@ -1,8 +1,12 @@
+# MakroMetriks Insights · Victor Valle Solar
+# github.com/vivaso86/MakroMetriks-Insights
+
 import pandas as pd
 from pytrends.request import TrendReq
 import importlib
 import time
 import random
+import hashlib
 import matplotlib.pyplot as plt
 import yfinance as yf
 import os
@@ -392,7 +396,7 @@ def generate_trends_report(sector_name="events", writer=None):
         workbook = writer.book
 
     sheet = workbook.add_worksheet(sheet_name)
-    title_fmt = workbook.add_format({'bold': True, 'font_size': 26, 'font_color': '#333F48'})
+    title_fmt = workbook.add_format({'bold': True, 'font_size': 48, 'font_color': '#333F48'})
     note_fmt = workbook.add_format({'font_size': 11, 'italic': True, 'font_color': '#5A5A5A', 'text_wrap': True, 'valign': 'top'})
     header_fmt = workbook.add_format({'bold': True, 'font_size': 22, 'font_color': '#1f4e78'})
     num_fmt = workbook.add_format({'bold': False, 'font_size': 16, 'font_color': '#000000', 'num_format': '#,##0.0000'})
@@ -403,24 +407,37 @@ def generate_trends_report(sector_name="events", writer=None):
 
     try:
         sheet.write('A2', f"Sectorial Statistical Performance & Econometric Analysis ({sector_name})", title_fmt)
-        sheet.write('A44', f"Historical Trends & Market Dynamics Overview", title_fmt)
+        sheet.write('A36', f"Historical Trends & Market Dynamics Overview", title_fmt)
+        sheet.set_footer('&L&K909090&8Victor Valle Solar&R&K909090&8© MakroMetriks Insights')
 
-        images_config = {'A9': {'path': f"{path_plots}/OLS_Impact_{sector_name}.png", 'scale': 1}}
+        # Fit to page for PDF export
+        sheet.set_landscape()
+        sheet.fit_to_pages(1, 0)
+        sheet.set_margins(left=0.25, right=0.25, top=0.75, bottom=0.75)
+        sheet.set_paper(8)
+        sheet.set_h_pagebreaks([35, 115])
+
+        images_config = {'A8': {'path': f"{path_plots}/OLS_Impact_{sector_name}.png", 'scale': 1}}
         verdict_tables = []
-        c = 46
-        for i in range(0, len(events_plot), 2):
-            images_config[f'A{c}'] = {'path': events_plot[i], 'scale': 0.7}
-            date_left = os.path.basename(events_plot[i]).replace('_event.png', '')
-            verdict_tables.append((
-                f"{events_ver}/{date_left}_event_verdicts.csv", c + 21, 0, f'Event Diagnosis · {date_left}', False, False
-            ))
+        col_letters = ['A', 'G', 'M']  # 3 columnas: 0, 6, 12
+        col_offsets  = [0, 6, 12]
+        c = 38
 
-            # Right image (if exists)
-            if i + 1 < len(events_plot):
-                images_config[f'G{c}'] = {'path': events_plot[i+1], 'scale': 0.7}
-                date_right = os.path.basename(events_plot[i+1]).replace('_event.png', '')
+        for i in range(0, len(events_plot), 3):
+            for j in range(3):
+                idx = i + j
+                if idx >= len(events_plot):
+                    break
+                col_letter = col_letters[j]
+                col_offset = col_offsets[j]
+                date_str   = os.path.basename(events_plot[idx]).replace('_event.png', '')
+
+                images_config[f'{col_letter}{c}'] = {'path': events_plot[idx], 'scale': 0.7}
                 verdict_tables.append((
-                    f"{events_ver}/{date_right}_event_verdicts.csv", c + 21, 6, f'Event Diagnosis · {date_right}', False, False
+                    f"{events_ver}/{date_str}_event_verdicts.csv",
+                    c + 21, col_offset,
+                    f'Event Diagnosis · {date_str}',
+                    False, False
                 ))
             c += 26
 
@@ -435,9 +452,9 @@ def generate_trends_report(sector_name="events", writer=None):
 
         tables_to_process = [
             (f"{path_model}/{sector_name}_ols_metrics.csv", 4, 0, 'OLS Results', True, False),
-            (f"{path_model}/{sector_name}_ols_coefficients.csv", 36, 0, 'OLS Coefficients', True, False),
-            (f"{path_valid}/{sector_name}_adf_test.csv", 4, 9, 'Stationarity Test (ADF)', False, True ),
-            (f"{path_valid}/{sector_name}_vif_test.csv", 10, 9, 'Multicollinearity Test (VIF)',False, False),
+            (f"{path_model}/{sector_name}_ols_coefficients.csv", 4, 9, 'OLS Coefficients', True, False),
+            (f"{path_valid}/{sector_name}_adf_test.csv", 11, 9, 'Stationarity Test (ADF)', False, True ),
+            (f"{path_valid}/{sector_name}_vif_test.csv", 17, 9, 'Multicollinearity Test (VIF)',False, False),
         ] + verdict_tables
 
         for path, s_row, s_col, s_title, has_index, is_adf in tables_to_process:
