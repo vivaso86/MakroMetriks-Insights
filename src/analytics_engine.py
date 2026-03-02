@@ -49,6 +49,7 @@ def download_and_convert_tickers(tickers_dict, start_date, end_date, fx_ticker, 
     path = f"processed_data/comm_analysis/{sector_name}"
     sentiment_path = f"processed_data/sentiment"
     os.makedirs(path, exist_ok=True)
+    os.makedirs(sentiment_path, exist_ok=True)
     
     file_path = f"{path}/dataset_{sector_name}.csv"
     sentiment_file_path = f"{sentiment_path}/dataset_{sector_name}.csv" 
