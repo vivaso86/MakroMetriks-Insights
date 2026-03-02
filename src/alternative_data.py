@@ -448,7 +448,7 @@ def generate_trends_report(sector_name="events", writer=None):
                     'y_scale': info['scale'],
                     'object_position': 3,
                 })
-        sheet.set_column(0, 15, 20)
+        sheet.set_column(0, 16, 20)
 
         tables_to_process = [
             (f"{path_model}/{sector_name}_ols_metrics.csv", 4, 0, 'OLS Results', True, False),

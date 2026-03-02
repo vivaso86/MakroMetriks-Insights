@@ -9,4 +9,3 @@ __pycache__/
 # --- Data & Outputs ---
 processed_data/
 reports/
-plots/

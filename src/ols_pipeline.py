@@ -14,8 +14,8 @@ def build_ols_dataset(data_fx_ready,df_agro_ready,df_ener_ready,df_metal_ready, 
     default_shifts = {
         'Corn':           5,
         'LNG_Asia':       2,
-        'Internal_Index': 2,
-        'External_Index': 5,
+        'Internal_Index': 1,
+        'External_Index': 3,
     }
     if shifts:
         default_shifts.update(shifts)
