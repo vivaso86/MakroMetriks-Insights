@@ -12,6 +12,31 @@ The system decomposes equity returns into commodity sector exposures and alterna
 
 ---
 
+## Tech Stack
+
+### Core Language
+- **Python 3.9.6**
+
+### Data Engineering & Processing
+- pandas  
+- numpy  
+
+### Financial & Alternative Data Sources
+- yfinance (market data ingestion)  
+- pytrends (Google Trends sentiment extraction)  
+
+### Econometrics & Statistical Modeling
+- statsmodels (OLS regression, diagnostics, Granger causality)  
+- scipy (statistical testing)  
+
+### Visualization & Reporting
+- matplotlib  
+- seaborn  
+- xlsxwriter  
+- openpyxl  
+
+___
+
 ## Key Features
 - Multi-factor OLS regression with standardized returns  
 - Statistical validation: ADF stationarity, VIF multicollinearity, Durbin-Watson autocorrelation  
@@ -28,17 +53,16 @@ git clone https://github.com/vivaso86/MakroMetriks-Insights.git
 cd MakroMetriks-Insights
 pip install -r requirements.txt
 ```
-Currently, the modules are not yet fully integrated into a single executable pipeline.
-Each notebook must be executed sequentially in the following order:
+The current version follows a modular research workflow. Notebooks should be executed sequentially:
 1. Commodity Module
 2. Alternative Data Module
 3. Main Pipeline
 
 ## Analytical Insights & Outputs
-The system translates complex econometric regressions into high-fidelity visual intelligence.
+The framework translates regression outputs into structured visual diagnostics for factor interpretation.
 
-### 1. Strategic Factor Attribution (The "Why")
-This visualization decomposes **Mitsubishi Corp's (8058.T)** returns, isolating systematic macro exposure from idiosyncratic sentiment drivers. It answers: *What is actually moving the stock?*
+### 1. Factor Attribution
+This visualization decomposes **Mitsubishi Corp's (8058.T)** returns, isolating systematic macro exposure from sentiment drivers. It answers what is truly moving the stock
 
 <p align="center">
   <img src="plots/final_ols/OLS_Impact_final_ols.png" width="900" title="OLS Factor Attribution">
@@ -48,14 +72,14 @@ This visualization decomposes **Mitsubishi Corp's (8058.T)** returns, isolating 
 We monitor the stability of relationships between equity prices and global commodity benchmarks. The system identifies shifts in correlation that precede structural price moves.
 
 <p align="center">
-  <img src="plots/comm_analysis/energy/Base_100_energy.png" width="55%" />
-  <img src="plots/comm_analysis/energy/Daily_Corr_energy.png" width="34%" />
+  <img src="plots/comm_analysis/energy/Base_100_energy.png" width="59%" />
+  <img src="plots/comm_analysis/energy/Daily_Corr_energy.png" width="37%" />
 </p>
 <p align="center">
   <img src="plots/comm_analysis/metal/Rolling_Corr_60_metal.png" width="900" title="Rolling Correlation Analysis">
 </p>
 
-### 3. Event Diagnosis: Sentiment vs. Fundamentals
+### 3. Event Diagnosis: Sentiment
 The system uses a **Z-Score classification engine** to audit historical price shocks. By cross-referencing internal corporate interest against global market panic, the model distinguishes between genuine corporate crises and unlinked market noise.
 
 | Case Study: Jun 2022 (Geopolitical Risk) | Case Study: Feb 2023 (Market Noise) |
